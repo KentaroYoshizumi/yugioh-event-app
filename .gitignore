@@ -39,3 +39,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Go backend
+backend/*.db
+backend/.env
+
+# Next.js
+frontend/.next/
