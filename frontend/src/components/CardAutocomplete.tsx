@@ -1,11 +1,68 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface CardSuggestion {
   id: number;
   name: string;
   type: string;
+}
+
+interface DropdownProps {
+  suggestions: CardSuggestion[];
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+  onSelect: (name: string) => void;
+}
+
+function Dropdown({ suggestions, anchorRef, onSelect }: DropdownProps) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (!anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    setStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }, [anchorRef, suggestions]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <ul
+      style={style}
+      className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+    >
+      {suggestions.map((s) => (
+        <li
+          key={s.id}
+          onMouseDown={() => onSelect(s.name)}
+          className="px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-50 last:border-0"
+        >
+          <span className="text-sm font-medium text-gray-800">{s.name}</span>
+          <span className="text-xs text-gray-400 ml-2">{s.type}</span>
+        </li>
+      ))}
+    </ul>,
+    document.body
+  );
+}
+
+async function fetchCards(query: string): Promise<CardSuggestion[]> {
+  const res = await fetch(
+    `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}&num=8&offset=0`
+  );
+  const data = await res.json();
+  if (!data.data) return [];
+  return data.data.map((c: { id: number; name: string; type: string }) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+  }));
 }
 
 interface Props {
@@ -32,17 +89,9 @@ export function CardAutocomplete({ value, onChange, placeholder, className }: Pr
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(value)}&num=8&offset=0`
-        );
-        const data = await res.json();
-        if (data.data) {
-          setSuggestions(data.data.map((c: { id: number; name: string; type: string }) => ({ id: c.id, name: c.name, type: c.type })));
-          setOpen(true);
-        } else {
-          setSuggestions([]);
-          setOpen(false);
-        }
+        const cards = await fetchCards(value);
+        setSuggestions(cards);
+        setOpen(cards.length > 0);
       } catch {
         setSuggestions([]);
       } finally {
@@ -76,22 +125,15 @@ export function CardAutocomplete({ value, onChange, placeholder, className }: Pr
           検索中...
         </div>
       )}
-      {open && suggestions.length > 0 && (
-        <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {suggestions.map((s) => (
-            <li
-              key={s.id}
-              onMouseDown={() => {
-                onChange(s.name);
-                setOpen(false);
-              }}
-              className="px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-50 last:border-0"
-            >
-              <span className="text-sm font-medium text-gray-800">{s.name}</span>
-              <span className="text-xs text-gray-400 ml-2">{s.type}</span>
-            </li>
-          ))}
-        </ul>
+      {open && (
+        <Dropdown
+          suggestions={suggestions}
+          anchorRef={containerRef}
+          onSelect={(name) => {
+            onChange(name);
+            setOpen(false);
+          }}
+        />
       )}
     </div>
   );
@@ -121,17 +163,9 @@ export function CardListBuilder({ value, onChange, className }: CardListBuilderP
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(search)}&num=8&offset=0`
-        );
-        const data = await res.json();
-        if (data.data) {
-          setSuggestions(data.data.map((c: { id: number; name: string; type: string }) => ({ id: c.id, name: c.name, type: c.type })));
-          setOpen(true);
-        } else {
-          setSuggestions([]);
-          setOpen(false);
-        }
+        const cards = await fetchCards(search);
+        setSuggestions(cards);
+        setOpen(cards.length > 0);
       } catch {
         setSuggestions([]);
       } finally {
@@ -150,12 +184,15 @@ export function CardListBuilder({ value, onChange, className }: CardListBuilderP
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const addCard = (name: string) => {
-    const line = `1 ${name}`;
-    onChange(value ? `${value}\n${line}` : line);
-    setSearch("");
-    setOpen(false);
-  };
+  const addCard = useCallback(
+    (name: string) => {
+      const line = `1 ${name}`;
+      onChange(value ? `${value}\n${line}` : line);
+      setSearch("");
+      setOpen(false);
+    },
+    [value, onChange]
+  );
 
   const inputBase =
     "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#7b2d8b] focus:border-transparent";
@@ -176,19 +213,12 @@ export function CardListBuilder({ value, onChange, className }: CardListBuilderP
             検索中...
           </div>
         )}
-        {open && suggestions.length > 0 && (
-          <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-            {suggestions.map((s) => (
-              <li
-                key={s.id}
-                onMouseDown={() => addCard(s.name)}
-                className="px-3 py-2 hover:bg-purple-50 cursor-pointer border-b border-gray-50 last:border-0"
-              >
-                <span className="text-sm font-medium text-gray-800">{s.name}</span>
-                <span className="text-xs text-gray-400 ml-2">{s.type}</span>
-              </li>
-            ))}
-          </ul>
+        {open && (
+          <Dropdown
+            suggestions={suggestions}
+            anchorRef={containerRef}
+            onSelect={addCard}
+          />
         )}
       </div>
       <textarea
