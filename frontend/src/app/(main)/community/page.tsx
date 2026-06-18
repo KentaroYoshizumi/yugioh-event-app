@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { api, Post } from "@/lib/api";
+import { CardAutocomplete, CardListBuilder } from "@/components/CardAutocomplete";
 
 type TabType = "all" | "battle_recruit" | "deck_share";
 
@@ -304,11 +305,10 @@ function PostForm({
 
           {type === "battle_recruit" && (
             <>
-              <input
-                type="text"
-                placeholder="使用デッキ（任意）"
+              <CardAutocomplete
                 value={form.deck_name}
-                onChange={(e) => setForm((f) => ({ ...f, deck_name: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, deck_name: v }))}
+                placeholder="使用デッキ（任意・英語名で検索可）"
                 className={inputClass}
               />
               <input
@@ -329,19 +329,16 @@ function PostForm({
 
           {type === "deck_share" && (
             <>
-              <input
-                type="text"
-                placeholder="デッキ名"
+              <CardAutocomplete
                 value={form.deck_name}
-                onChange={(e) => setForm((f) => ({ ...f, deck_name: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, deck_name: v }))}
+                placeholder="デッキ名（英語名で検索可）"
                 className={inputClass}
               />
-              <textarea
-                placeholder="カードリスト（自由形式）"
+              <CardListBuilder
                 value={form.card_list}
-                onChange={(e) => setForm((f) => ({ ...f, card_list: e.target.value }))}
-                rows={5}
-                className={inputClass + " resize-none font-mono text-xs"}
+                onChange={(v) => setForm((f) => ({ ...f, card_list: v }))}
+                className={inputClass}
               />
             </>
           )}
